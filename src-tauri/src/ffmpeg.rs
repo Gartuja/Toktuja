@@ -249,8 +249,8 @@ pub async fn export_project(app: AppHandle, req: ExportRequest) -> Result<String
         let t_start = clip.timeline_start.max(0.0);
         let t_end = t_start + dur;
         let zoom = clip.zoom.clamp(0.2, 3.0);
-        let cx = clip.crop_x.clamp(-1.0, 1.0);
-        let cy = clip.crop_y.clamp(-1.0, 1.0);
+        let cx = clip.crop_x.clamp(-1.5, 1.5);
+        let cy = clip.crop_y.clamp(-1.5, 1.5);
 
         let mut ov_x = "0".to_string();
         let mut ov_y = "0".to_string();

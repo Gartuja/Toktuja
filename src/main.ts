@@ -52,6 +52,7 @@ const audioPlayers = new Map<string, HTMLAudioElement>();
 const previewStage = document.getElementById("preview-stage") as HTMLDivElement;
 const previewVideo = document.getElementById("preview-video") as HTMLVideoElement;
 const previewBgVideo = document.getElementById("preview-bg-video") as HTMLVideoElement;
+const transformBox = document.getElementById("transform-box") as HTMLDivElement;
 const previewEmpty = document.getElementById("preview-empty") as HTMLDivElement;
 const timecodeEl = document.getElementById("timecode") as HTMLSpanElement;
 const btnPlay = document.getElementById("btn-play") as HTMLButtonElement;
@@ -385,6 +386,32 @@ function deleteSelectedClip(): void {
 }
 
 // --- Preview & Playback ---
+function updateTransformBox(clip: VideoClip | undefined): void {
+  if (state.fitMode !== "fit" || !clip || previewVideo.videoWidth === 0 || previewVideo.videoHeight === 0) {
+    transformBox.classList.add("hidden");
+    return;
+  }
+
+  const sw = previewStage.clientWidth;
+  const sh = previewStage.clientHeight;
+  if (sw === 0 || sh === 0) {
+    transformBox.classList.add("hidden");
+    return;
+  }
+
+  const containScale = Math.min(sw / previewVideo.videoWidth, sh / previewVideo.videoHeight);
+  const boxW = previewVideo.videoWidth * containScale * clip.zoom;
+  const boxH = previewVideo.videoHeight * containScale * clip.zoom;
+  const centerX = sw / 2 + clip.cropX * (sw / 2);
+  const centerY = sh / 2 + clip.cropY * (sh / 2);
+
+  transformBox.classList.remove("hidden");
+  transformBox.style.width = `${boxW}px`;
+  transformBox.style.height = `${boxH}px`;
+  transformBox.style.left = `${centerX - boxW / 2}px`;
+  transformBox.style.top = `${centerY - boxH / 2}px`;
+}
+
 function updatePreviewStageStyle(): void {
   previewStage.className = "preview-stage";
   previewStage.classList.add(`ratio-${state.aspectRatio.replace(":", "-")}`);
@@ -414,6 +441,8 @@ function updatePreviewStageStyle(): void {
     previewVideo.style.objectPosition = `${px}% ${py}%`;
     previewVideo.style.transform = clip ? `scale(${Math.max(1, clip.zoom)})` : "none";
   }
+
+  updateTransformBox(clip);
 }
 
 previewVideo.addEventListener("loadedmetadata", () => {
@@ -427,6 +456,7 @@ previewVideo.addEventListener("loadedmetadata", () => {
   if (isPlaying && previewVideo.paused) {
     previewVideo.play().catch(() => {});
   }
+  updatePreviewStageStyle();
 });
 
 function syncAudioPlayers(forceSeek: boolean): void {
@@ -1124,6 +1154,79 @@ function initEvents(): void {
       }
     })
     .catch(() => {});
+
+  // Direct mouse transform on preview (drag to move, corner handles to resize, wheel to zoom)
+  transformBox.addEventListener("mousedown", (e) => {
+    const found = findTopVideoClipAtTime(playheadTime);
+    if (!found || state.fitMode !== "fit") return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clip = found.clip;
+    selectedClip = { type: "video", id: clip.id };
+    const handle = (e.target as HTMLElement).dataset.handle;
+    const rect = previewStage.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2 + clip.cropX * (rect.width / 2);
+    const centerY = rect.top + rect.height / 2 + clip.cropY * (rect.height / 2);
+
+    pushUndo();
+
+    if (handle) {
+      const initDist = Math.max(10, Math.hypot(e.clientX - centerX, e.clientY - centerY));
+      const origZoom = clip.zoom;
+
+      const onMove = (ev: MouseEvent) => {
+        const dist = Math.max(10, Math.hypot(ev.clientX - centerX, ev.clientY - centerY));
+        clip.zoom = Math.max(0.2, Math.min(3.0, origZoom * (dist / initDist)));
+        updatePreviewStageStyle();
+        renderInspector();
+      };
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    } else {
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const origCX = clip.cropX;
+      const origCY = clip.cropY;
+
+      const onMove = (ev: MouseEvent) => {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        clip.cropX = Math.max(-1.5, Math.min(1.5, origCX + dx / (rect.width / 2)));
+        clip.cropY = Math.max(-1.5, Math.min(1.5, origCY + dy / (rect.height / 2)));
+        updatePreviewStageStyle();
+        renderInspector();
+      };
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    }
+  });
+
+  previewStage.addEventListener(
+    "wheel",
+    (e) => {
+      const found = findTopVideoClipAtTime(playheadTime);
+      if (!found || (state.fitMode !== "fit" && state.fitMode !== "crop")) return;
+      e.preventDefault();
+      const clip = found.clip;
+      const delta = e.deltaY < 0 ? 0.08 : -0.08;
+      const minZ = state.fitMode === "crop" ? 1.0 : 0.2;
+      clip.zoom = Math.max(minZ, Math.min(3.0, clip.zoom + delta));
+      updatePreviewStageStyle();
+      renderInspector();
+    },
+    { passive: false }
+  );
+
+  window.addEventListener("resize", () => updatePreviewStageStyle());
 
   // Export progress event
   listen<{ percent: number; status: string }>("export-progress", (event) => {

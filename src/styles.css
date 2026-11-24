@@ -407,6 +407,28 @@ kbd {
   z-index: 1;
 }
 
+.transform-box {
+  position: absolute;
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+  cursor: move;
+}
+
+.tf-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+}
+
+.tf-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.tf-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.tf-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.tf-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
 .preview-empty {
   position: absolute;
   inset: 0;
