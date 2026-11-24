@@ -2,6 +2,7 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   DEFAULT_SHORTCUTS,
   SHORTCUT_LABELS,
@@ -45,6 +46,7 @@ let lastFrameTs = 0;
 let loadedVideoSrc = "";
 let activeVideoClipId: string | null = null;
 let pendingVideoSeek: number | null = null;
+let hasUnsavedChanges = false;
 
 const audioPlayers = new Map<string, HTMLAudioElement>();
 
@@ -75,6 +77,7 @@ const modalExport = document.getElementById("modal-export") as HTMLDivElement;
 const exportStatus = document.getElementById("export-status") as HTMLParagraphElement;
 const exportFill = document.getElementById("export-progress-fill") as HTMLDivElement;
 const btnCloseExport = document.getElementById("btn-close-export") as HTMLButtonElement;
+const modalCloseDraft = document.getElementById("modal-close-draft") as HTMLDivElement;
 
 // --- Helpers ---
 function uid(): string {
@@ -85,6 +88,7 @@ function pushUndo(): void {
   undoStack.push(JSON.stringify(state));
   if (undoStack.length > 40) undoStack.shift();
   redoStack = [];
+  hasUnsavedChanges = true;
 }
 
 function undo(): void {
@@ -168,10 +172,90 @@ function findActiveAudioClipsAtTime(t: number): { clip: AudioClip; localOffset: 
   return result;
 }
 
+// --- Drafts (.toktuja) ---
+async function saveDraft(): Promise<boolean> {
+  if (state.videoClips.length === 0 && state.audioClips.length === 0) {
+    alert("Adicione algum vídeo ou áudio antes de salvar um rascunho.");
+    return false;
+  }
+  const path = await save({
+    defaultPath: "rascunho.toktuja",
+    filters: [{ name: "Rascunho Toktuja", extensions: ["toktuja"] }],
+  });
+  if (!path) return false;
+
+  const payload = JSON.stringify({ version: "0.2.2", state }, null, 2);
+  await invoke("save_project_file", { path, content: payload });
+  hasUnsavedChanges = false;
+  return true;
+}
+
+async function loadDraft(path: string): Promise<void> {
+  try {
+    const raw = await invoke<string>("load_project_file", { path });
+    const parsed = JSON.parse(raw) as { state?: ProjectState };
+    const loaded = parsed.state ?? (parsed as unknown as ProjectState);
+    if (!loaded || !Array.isArray(loaded.videoClips) || !Array.isArray(loaded.audioClips)) {
+      throw new Error("Arquivo de rascunho inválido.");
+    }
+
+    for (const player of audioPlayers.values()) player.pause();
+    audioPlayers.clear();
+
+    loaded.videoClips = loaded.videoClips.map((c) => ({
+      ...c,
+      src: convertFileSrc(c.path),
+    }));
+    loaded.audioClips = loaded.audioClips.map((a) => ({
+      ...a,
+      src: convertFileSrc(a.path),
+    }));
+
+    state = loaded;
+    undoStack = [];
+    redoStack = [];
+    selectedClip = null;
+    playheadTime = 0;
+    loadedVideoSrc = "";
+    activeVideoClipId = null;
+    hasUnsavedChanges = false;
+
+    document.querySelectorAll<HTMLButtonElement>("#aspect-selector button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.aspect === state.aspectRatio);
+    });
+    document.querySelectorAll<HTMLButtonElement>("#fit-selector button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.fit === state.fitMode);
+    });
+    masterVolInput.value = String(state.videoVolume ?? 1);
+    btnMuteMaster.textContent = state.videoMuted ? "🔇" : "🔊";
+
+    renderAll();
+    syncMediaToPlayhead(true);
+  } catch (err) {
+    alert(`Erro ao abrir rascunho: ${String(err)}`);
+  }
+}
+
+async function openDraftDialog(): Promise<void> {
+  const res = await open({
+    multiple: false,
+    filters: [{ name: "Rascunho Toktuja", extensions: ["toktuja"] }],
+  });
+  if (!res) return;
+  await loadDraft(Array.isArray(res) ? res[0] : res);
+}
+
 // --- Media Import ---
 async function importFiles(paths: string[]): Promise<void> {
   const videoExts = [".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"];
   const audioExts = [".mp3", ".wav", ".aac", ".m4a", ".ogg", ".flac"];
+
+  for (const p of paths) {
+    if (p.toLowerCase().endsWith(".toktuja")) {
+      await loadDraft(p);
+      return;
+    }
+  }
 
   pushUndo();
   for (const p of paths) {
@@ -997,6 +1081,7 @@ async function exportVideo(): Promise<void> {
     });
     exportFill.style.width = "100%";
     exportStatus.textContent = `Concluído! Salvo em: ${resultPath}`;
+    hasUnsavedChanges = false;
   } catch (err) {
     exportStatus.textContent = `Erro: ${String(err)}`;
   } finally {
@@ -1006,6 +1091,8 @@ async function exportVideo(): Promise<void> {
 
 // --- Event Wiring ---
 function initEvents(): void {
+  document.getElementById("btn-open-draft")!.onclick = () => void openDraftDialog();
+  document.getElementById("btn-save-draft")!.onclick = () => void saveDraft();
   document.getElementById("btn-add-video")!.onclick = openVideoDialog;
   document.getElementById("btn-add-audio")!.onclick = openAudioDialog;
   document.getElementById("btn-split")!.onclick = splitAtPlayhead;
@@ -1228,6 +1315,33 @@ function initEvents(): void {
 
   window.addEventListener("resize", () => updatePreviewStageStyle());
 
+  // Close confirmation when unexported changes exist
+  const appWindow = getCurrentWindow();
+  appWindow
+    .onCloseRequested((event) => {
+      if (hasUnsavedChanges && (state.videoClips.length > 0 || state.audioClips.length > 0)) {
+        event.preventDefault();
+        modalCloseDraft.classList.remove("hidden");
+      }
+    })
+    .catch(() => {});
+
+  document.getElementById("btn-close-cancel")!.onclick = () => {
+    modalCloseDraft.classList.add("hidden");
+  };
+  document.getElementById("btn-close-discard")!.onclick = () => {
+    hasUnsavedChanges = false;
+    modalCloseDraft.classList.add("hidden");
+    void appWindow.destroy();
+  };
+  document.getElementById("btn-close-save")!.onclick = async () => {
+    const saved = await saveDraft();
+    if (saved) {
+      modalCloseDraft.classList.add("hidden");
+      void appWindow.destroy();
+    }
+  };
+
   // Export progress event
   listen<{ percent: number; status: string }>("export-progress", (event) => {
     exportFill.style.width = `${event.payload.percent}%`;
@@ -1239,3 +1353,9 @@ function initEvents(): void {
 initEvents();
 renderAll();
 syncMediaToPlayhead(true);
+
+invoke<string | null>("get_startup_draft")
+  .then((draftPath) => {
+    if (draftPath) void loadDraft(draftPath);
+  })
+  .catch(() => {});

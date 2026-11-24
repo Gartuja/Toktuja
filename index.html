@@ -38,6 +38,12 @@
         </div>
 
         <div class="topbar-actions">
+          <button id="btn-open-draft" class="btn btn-ghost" title="Abrir rascunho (.toktuja)">
+            📂 Abrir
+          </button>
+          <button id="btn-save-draft" class="btn btn-ghost" title="Salvar rascunho do projeto">
+            💾 Rascunho
+          </button>
           <button id="btn-shortcuts" class="btn btn-ghost" title="Configurar atalhos de teclado">
             ⌨ Atalhos
           </button>
@@ -70,7 +76,7 @@
                 <kbd data-shortcut-label="addAudio"></kbd>
               </button>
             </div>
-            <p class="hint">Dica: Você também pode arrastar arquivos de vídeo ou áudio para a janela.</p>
+            <p class="hint">Dica: Você também pode arrastar vídeos, músicas ou rascunhos (.toktuja) para a janela.</p>
           </section>
 
           <section class="panel inspector" id="inspector-panel">
@@ -194,6 +200,23 @@
         </div>
         <div class="modal-footer">
           <button id="btn-close-export" class="btn btn-primary hidden">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Close Confirmation Modal -->
+    <div id="modal-close-draft" class="modal hidden">
+      <div class="modal-card modal-small">
+        <div class="modal-header">
+          <h3>Salvar rascunho antes de sair?</h3>
+        </div>
+        <p class="modal-desc">
+          Este vídeo ainda não foi exportado. Deseja salvar um rascunho (.toktuja) para continuar sua edição depois?
+        </p>
+        <div class="modal-footer">
+          <button id="btn-close-cancel" class="btn btn-ghost">Cancelar</button>
+          <button id="btn-close-discard" class="btn btn-secondary">Sair sem salvar</button>
+          <button id="btn-close-save" class="btn btn-primary">Salvar Rascunho</button>
         </div>
       </div>
     </div>
