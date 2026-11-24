@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Toktuja — Editor de Vídeo</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          <span class="brand-name">Toktuja</span>
+          <span class="brand-tag">Lite</span>
+        </div>
+
+        <div class="topbar-center">
+          <div class="control-group">
+            <label>Proporção</label>
+            <div class="segmented" id="aspect-selector">
+              <button data-aspect="9:16" class="active" title="Vertical (TikTok, Reels, Shorts)">9:16</button>
+              <button data-aspect="16:9" title="Horizontal (YouTube)">16:9</button>
+              <button data-aspect="1:1" title="Quadrado">1:1</button>
+              <button data-aspect="4:5" title="Retrato (Instagram)">4:5</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>Enquadramento</label>
+            <div class="segmented" id="fit-selector">
+              <button data-fit="crop" class="active" title="Preenche toda a tela (Crop/Zoom)">Preencher</button>
+              <button data-fit="blur" title="Vídeo inteiro com fundo desfocado">Blur</button>
+              <button data-fit="fit" title="Vídeo inteiro com barras pretas">Ajustar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <button id="btn-shortcuts" class="btn btn-ghost" title="Configurar atalhos de teclado">
+            ⌨ Atalhos
+          </button>
+          <select id="export-resolution" class="select-res" title="Resolução de exportação">
+            <option value="1080p" selected>1080p</option>
+            <option value="720p">720p</option>
+            <option value="480p">480p</option>
+          </select>
+          <button id="btn-export" class="btn btn-primary">
+            Exportar Vídeo
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Workspace -->
+      <main class="workspace">
+        <!-- Left Sidebar: Media & Inspector -->
+        <aside class="sidebar">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>Mídia</h2>
+            </div>
+            <div class="import-buttons">
+              <button id="btn-add-video" class="btn btn-secondary btn-full">
+                <span>+ Adicionar Vídeo</span>
+                <kbd data-shortcut-label="addVideo"></kbd>
+              </button>
+              <button id="btn-add-audio" class="btn btn-secondary btn-full">
+                <span>+ Adicionar Música / Áudio</span>
+                <kbd data-shortcut-label="addAudio"></kbd>
+              </button>
+            </div>
+            <p class="hint">Dica: Você também pode arrastar arquivos de vídeo ou áudio para a janela.</p>
+          </section>
+
+          <section class="panel inspector" id="inspector-panel">
+            <div class="panel-header">
+              <h2>Inspetor</h2>
+              <span id="inspector-badge" class="badge">Nada selecionado</span>
+            </div>
+            <div id="inspector-body" class="inspector-body">
+              <p class="empty-msg">Selecione um clipe na timeline para ajustar volume, corte ou enquadramento.</p>
+            </div>
+          </section>
+        </aside>
+
+        <!-- Center: Video Preview -->
+        <section class="preview-area">
+          <div class="preview-stage-wrapper" id="preview-wrapper">
+            <div class="preview-stage ratio-9-16" id="preview-stage">
+              <video id="preview-bg-video" class="preview-bg-video hidden" muted playsinline></video>
+              <video id="preview-video" class="preview-video" playsinline></video>
+              <div id="preview-empty" class="preview-empty">
+                <span>Adicione um vídeo para começar</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="transport">
+            <div class="transport-left">
+              <span id="timecode" class="timecode">00:00.0 / 00:00.0</span>
+            </div>
+            <div class="transport-center">
+              <button id="btn-step-back" class="btn-icon" title="Voltar">⏮</button>
+              <button id="btn-play" class="btn-play" title="Play / Pause">▶</button>
+              <button id="btn-step-forward" class="btn-icon" title="Avançar">⏭</button>
+            </div>
+            <div class="transport-right">
+              <button id="btn-mute-master" class="btn-icon" title="Silenciar áudio dos vídeos">🔊</button>
+              <input id="master-video-volume" type="range" min="0" max="1.5" step="0.05" value="1" title="Volume geral dos vídeos" />
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Bottom: Timeline -->
+      <section class="timeline-section">
+        <div class="timeline-toolbar">
+          <div class="toolbar-group">
+            <button id="btn-split" class="btn btn-tool" title="Cortar clipe na agulha">
+              ✂ Cortar <kbd data-shortcut-label="split"></kbd>
+            </button>
+            <button id="btn-trim-start" class="btn btn-tool" title="Aparar início até a agulha">
+              ⇤ Aparar Início <kbd data-shortcut-label="trimStart"></kbd>
+            </button>
+            <button id="btn-trim-end" class="btn btn-tool" title="Aparar fim a partir da agulha">
+              Aparar Fim ⇥ <kbd data-shortcut-label="trimEnd"></kbd>
+            </button>
+            <button id="btn-delete" class="btn btn-tool btn-danger-ghost" title="Remover clipe selecionado">
+              🗑 Excluir <kbd data-shortcut-label="deleteClip"></kbd>
+            </button>
+          </div>
+
+          <div class="toolbar-group">
+            <button id="btn-undo" class="btn btn-tool" title="Desfazer">↶ Desfazer</button>
+            <button id="btn-redo" class="btn btn-tool" title="Refazer">↷ Refazer</button>
+            <span class="divider"></span>
+            <span class="zoom-label">Zoom</span>
+            <button id="btn-zoom-out" class="btn btn-tool">-</button>
+            <button id="btn-zoom-in" class="btn btn-tool">+</button>
+          </div>
+        </div>
+
+        <div class="timeline-container" id="timeline-container">
+          <div class="timeline-headers" id="timeline-headers">
+            <div class="ruler-corner">Tempo</div>
+          </div>
+
+          <div class="timeline-scroll" id="timeline-scroll">
+            <div class="timeline-canvas" id="timeline-canvas">
+              <div class="time-ruler" id="time-ruler"></div>
+              <div id="tracks-lanes"></div>
+              <div class="playhead" id="playhead">
+                <div class="playhead-handle"></div>
+                <div class="playhead-line"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Shortcuts Modal -->
+    <div id="modal-shortcuts" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Atalhos Customizáveis</h3>
+          <button id="btn-close-shortcuts" class="btn-icon">✕</button>
+        </div>
+        <p class="modal-desc">Clique em um atalho e pressione a nova tecla ou combinação (ex: S, Ctrl+B, Espaço).</p>
+        <div id="shortcuts-list" class="shortcuts-list"></div>
+        <div class="modal-footer">
+          <button id="btn-reset-shortcuts" class="btn btn-ghost">Restaurar Padrões</button>
+          <button id="btn-done-shortcuts" class="btn btn-primary">Concluir</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="modal-export" class="modal hidden">
+      <div class="modal-card modal-small">
+        <div class="modal-header">
+          <h3>Exportando Vídeo</h3>
+        </div>
+        <p id="export-status" class="modal-desc">Preparando FFmpeg...</p>
+        <div class="progress-bar">
+          <div id="export-progress-fill" class="progress-fill" style="width: 0%"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-close-export" class="btn btn-primary hidden">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <audio id="preview-audio" class="hidden"></audio>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+[package]
+name = "toktuja"
+version = "0.2.0"
+description = "Toktuja - Editor de vídeo leve e otimizado"
+authors = ["Gartuja"]
+edition = "2021"
+
+[lib]
+name = "toktuja_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process", "io-util", "sync", "time"] }
