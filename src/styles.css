@@ -6,9 +6,9 @@
   --border: #2a3040;
   --text: #eef1f7;
   --text-muted: #8f98ad;
-  --accent: #00d2b4;
-  --accent-hover: #00eccb;
-  --accent-text: #061412;
+  --accent: #d40a0a;
+  --accent-hover: #f01818;
+  --accent-text: #ffffff;
   --video-clip: #2563eb;
   --video-clip-sel: #3b82f6;
   --audio-clip: #059669;
@@ -496,7 +496,8 @@ kbd {
 
 /* Timeline */
 .timeline-section {
-  height: 260px;
+  height: auto;
+  max-height: 300px;
   background: var(--bg-panel);
   border-top: 1px solid var(--border);
   display: flex;
@@ -747,7 +748,7 @@ kbd {
 .shortcut-key-btn.recording {
   border-color: var(--accent);
   color: #fff;
-  background: rgba(0, 210, 180, 0.2);
+  background: rgba(212, 10, 10, 0.22);
 }
 
 .modal-footer {
