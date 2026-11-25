@@ -1,6 +1,6 @@
 [package]
 name = "toktuja"
-version = "0.2.3"
+version = "0.3.0"
 description = "Toktuja - Editor de vídeo leve e otimizado"
 authors = ["Gartuja"]
 edition = "2021"

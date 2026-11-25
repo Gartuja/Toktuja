@@ -23,6 +23,12 @@
               <button data-aspect="16:9" title="Horizontal (YouTube)">16:9</button>
               <button data-aspect="1:1" title="Quadrado">1:1</button>
               <button data-aspect="4:5" title="Retrato (Instagram)">4:5</button>
+              <button data-aspect="custom" title="Proporção personalizada">Custom</button>
+            </div>
+            <div id="custom-aspect-box" class="custom-aspect-box hidden">
+              <input id="custom-w" type="number" min="1" max="10000" value="16" title="Largura" />
+              <span>:</span>
+              <input id="custom-h" type="number" min="1" max="10000" value="10" title="Altura" />
             </div>
           </div>
 
@@ -47,9 +53,16 @@
             ⌨ Atalhos
           </button>
           <select id="export-resolution" class="select-res" title="Resolução de exportação">
+            <option value="2160p">4K (2160p)</option>
             <option value="1080p" selected>1080p</option>
             <option value="720p">720p</option>
             <option value="480p">480p</option>
+          </select>
+          <select id="export-fps" class="select-res" title="Taxa de quadros (FPS)">
+            <option value="24">24 fps</option>
+            <option value="30" selected>30 fps</option>
+            <option value="60">60 fps</option>
+            <option value="120">120 fps</option>
           </select>
           <button id="btn-export" class="btn btn-primary">
             Exportar Vídeo
@@ -67,15 +80,19 @@
             </div>
             <div class="import-buttons">
               <button id="btn-add-video" class="btn btn-secondary btn-full">
-                <span>+ Adicionar Vídeo</span>
+                <span>+ Adicionar Vídeo / Overlay</span>
                 <kbd data-shortcut-label="addVideo"></kbd>
+              </button>
+              <button id="btn-add-image" class="btn btn-secondary btn-full">
+                <span>+ Adicionar Imagem / Overlay</span>
+                <kbd data-shortcut-label="addImage"></kbd>
               </button>
               <button id="btn-add-audio" class="btn btn-secondary btn-full">
                 <span>+ Adicionar Música / Áudio</span>
                 <kbd data-shortcut-label="addAudio"></kbd>
               </button>
             </div>
-            <p class="hint">Dica: Você também pode arrastar vídeos, músicas ou rascunhos (.toktuja) para a janela.</p>
+            <p class="hint">Dica: Arraste vídeos, imagens, músicas ou rascunhos (.toktuja) para a janela.</p>
           </section>
 
           <section class="panel inspector" id="inspector-panel">
@@ -94,7 +111,7 @@
           <div class="preview-stage-wrapper" id="preview-wrapper">
             <div class="preview-stage ratio-9-16" id="preview-stage">
               <video id="preview-bg-video" class="preview-bg-video hidden" muted playsinline></video>
-              <video id="preview-video" class="preview-video" playsinline></video>
+              <div id="preview-layers" class="preview-layers"></div>
               <div id="transform-box" class="transform-box hidden">
                 <div class="tf-handle tf-nw" data-handle="nw"></div>
                 <div class="tf-handle tf-ne" data-handle="ne"></div>
@@ -102,7 +119,7 @@
                 <div class="tf-handle tf-se" data-handle="se"></div>
               </div>
               <div id="preview-empty" class="preview-empty">
-                <span>Adicione um vídeo para começar</span>
+                <span>Adicione um vídeo ou imagem para começar</span>
               </div>
             </div>
           </div>

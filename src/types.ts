@@ -1,4 +1,4 @@
-export type AspectRatio = "9:16" | "16:9" | "1:1" | "4:5";
+export type AspectRatio = "9:16" | "16:9" | "1:1" | "4:5" | "custom";
 export type FitMode = "crop" | "blur" | "fit";
 
 export interface MediaMetadata {
@@ -17,6 +17,7 @@ export interface VideoClip {
   path: string;
   src: string;
   name: string;
+  mediaType: "video" | "image";
   originalDuration: number;
   startTime: number;
   endTime: number;
@@ -25,9 +26,12 @@ export interface VideoClip {
   volume: number;
   muted: boolean;
   hasAudio: boolean;
-  cropX: number; // -1..1
-  cropY: number; // -1..1
-  zoom: number;  // 1..3
+  cropX: number; // -1.5..1.5
+  cropY: number; // -1.5..1.5
+  zoom: number;  // 0.2..3.0
+  flipH: boolean;
+  flipV: boolean;
+  thumbUrl?: string;
 }
 
 export interface AudioClip {
@@ -48,6 +52,8 @@ export interface ProjectState {
   videoClips: VideoClip[];
   audioClips: AudioClip[];
   aspectRatio: AspectRatio;
+  customAspectW: number;
+  customAspectH: number;
   fitMode: FitMode;
   videoVolume: number;
   videoMuted: boolean;
@@ -57,6 +63,7 @@ export type ShortcutAction =
   | "playPause"
   | "split"
   | "addVideo"
+  | "addImage"
   | "addAudio"
   | "trimStart"
   | "trimEnd"

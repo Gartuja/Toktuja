@@ -20,6 +20,8 @@ pub struct MediaMetadata {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct VideoClipExport {
     pub path: String,
+    #[serde(default = "default_media_type")]
+    pub media_type: String,
     pub start_time: f64,
     pub end_time: f64,
     pub timeline_start: f64,
@@ -30,6 +32,14 @@ pub struct VideoClipExport {
     pub crop_x: f64,
     pub crop_y: f64,
     pub zoom: f64,
+    #[serde(default)]
+    pub flip_h: bool,
+    #[serde(default)]
+    pub flip_v: bool,
+}
+
+fn default_media_type() -> String {
+    "video".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -47,11 +57,27 @@ pub struct ExportRequest {
     pub video_clips: Vec<VideoClipExport>,
     pub audio_clips: Vec<AudioClipExport>,
     pub aspect_ratio: String,
+    #[serde(default = "default_custom_w")]
+    pub custom_aspect_w: u32,
+    #[serde(default = "default_custom_h")]
+    pub custom_aspect_h: u32,
     pub resolution: String,
+    #[serde(default = "default_fps")]
+    pub fps: u32,
     pub fit_mode: String,
     pub video_volume: f64,
     pub video_muted: bool,
     pub output_path: String,
+}
+
+fn default_custom_w() -> u32 {
+    16
+}
+fn default_custom_h() -> u32 {
+    10
+}
+fn default_fps() -> u32 {
+    30
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -170,10 +196,11 @@ pub async fn probe_media(path: String) -> Result<MediaMetadata, String> {
     })
 }
 
-fn target_dimensions(aspect_ratio: &str, resolution: &str) -> (u32, u32) {
+fn target_dimensions(aspect_ratio: &str, resolution: &str, custom_w: u32, custom_h: u32) -> (u32, u32) {
     let base = match resolution {
         "480p" => 480u32,
         "720p" => 720u32,
+        "2160p" => 2160u32,
         _ => 1080u32,
     };
     match aspect_ratio {
@@ -190,19 +217,36 @@ fn target_dimensions(aspect_ratio: &str, resolution: &str) -> (u32, u32) {
             let h = ((base as f64 * 5.0 / 4.0).round() as u32) & !1;
             (base, h)
         }
+        "custom" => {
+            let cw = custom_w.max(1) as f64;
+            let ch = custom_h.max(1) as f64;
+            if cw >= ch {
+                let w = (((base as f64 * cw / ch).round() as u32).max(16)) & !1;
+                (w, base)
+            } else {
+                let h = (((base as f64 * ch / cw).round() as u32).max(16)) & !1;
+                (base, h)
+            }
+        }
         _ => (1080, 1920),
     }
 }
 
 pub async fn export_project(app: AppHandle, req: ExportRequest) -> Result<String, String> {
     if req.video_clips.is_empty() {
-        return Err("Adicione pelo menos um vídeo na timeline antes de exportar.".to_string());
+        return Err("Adicione pelo menos um vídeo ou imagem na timeline antes de exportar.".to_string());
     }
 
-    let (target_w, target_h) = target_dimensions(&req.aspect_ratio, &req.resolution);
+    let (target_w, target_h) = target_dimensions(
+        &req.aspect_ratio,
+        &req.resolution,
+        req.custom_aspect_w,
+        req.custom_aspect_h,
+    );
+    let export_fps = req.fps.clamp(15, 120);
     let mut args: Vec<String> = vec!["-y".to_string()];
 
-    // Sort video clips by track_index ascending so higher tracks overlay lower tracks
+    // Sort video/image clips by track_index ascending so higher tracks overlay lower tracks
     let mut sorted_videos = req.video_clips.clone();
     sorted_videos.sort_by_key(|c| c.track_index);
 
@@ -210,14 +254,25 @@ pub async fn export_project(app: AppHandle, req: ExportRequest) -> Result<String
     for clip in &sorted_videos {
         let dur = (clip.end_time - clip.start_time).max(0.05);
         total_duration = total_duration.max(clip.timeline_start + dur);
-        args.extend([
-            "-ss".to_string(),
-            format!("{:.3}", clip.start_time),
-            "-t".to_string(),
-            format!("{:.3}", dur),
-            "-i".to_string(),
-            clip.path.clone(),
-        ]);
+        if clip.media_type == "image" {
+            args.extend([
+                "-loop".to_string(),
+                "1".to_string(),
+                "-t".to_string(),
+                format!("{:.3}", dur),
+                "-i".to_string(),
+                clip.path.clone(),
+            ]);
+        } else {
+            args.extend([
+                "-ss".to_string(),
+                format!("{:.3}", clip.start_time),
+                "-t".to_string(),
+                format!("{:.3}", dur),
+                "-i".to_string(),
+                clip.path.clone(),
+            ]);
+        }
     }
 
     for aclip in &req.audio_clips {
@@ -235,7 +290,7 @@ pub async fn export_project(app: AppHandle, req: ExportRequest) -> Result<String
     total_duration = total_duration.max(0.1);
     let mut filter_parts: Vec<String> = Vec::new();
     filter_parts.push(format!(
-        "color=c=black:s={target_w}x{target_h}:d={total_duration:.3}:r=30,format=yuv420p[base0]"
+        "color=c=black:s={target_w}x{target_h}:d={total_duration:.3}:r={export_fps},format=rgba[base0]"
     ));
     filter_parts.push(format!(
         "anullsrc=channel_layout=stereo:sample_rate=44100:d={total_duration:.3}[abase]"
@@ -252,6 +307,14 @@ pub async fn export_project(app: AppHandle, req: ExportRequest) -> Result<String
         let cx = clip.crop_x.clamp(-1.5, 1.5);
         let cy = clip.crop_y.clamp(-1.5, 1.5);
 
+        let mut flip_chain = String::new();
+        if clip.flip_h {
+            flip_chain.push_str(",hflip");
+        }
+        if clip.flip_v {
+            flip_chain.push_str(",vflip");
+        }
+
         let mut ov_x = "0".to_string();
         let mut ov_y = "0".to_string();
 
@@ -262,16 +325,16 @@ pub async fn export_project(app: AppHandle, req: ExportRequest) -> Result<String
                 ov_x = format!("({target_w}-w)/2+({cx:.4})*({target_w}/2)");
                 ov_y = format!("({target_h}-h)/2+({cy:.4})*({target_h}/2)");
                 format!(
-                    "[{i}:v]fps=30,scale={fit_w}:{fit_h}:force_original_aspect_ratio=decrease,\
-                     setsar=1,format=yuv420p,setpts=PTS-STARTPTS+{t_start:.3}/TB[v{i}]"
+                    "[{i}:v]fps={export_fps},scale={fit_w}:{fit_h}:force_original_aspect_ratio=decrease\
+                     {flip_chain},setsar=1,format=rgba,setpts=PTS-STARTPTS+{t_start:.3}/TB[v{i}]"
                 )
             }
             "blur" => format!(
-                "[{i}:v]fps=30,split=2[bg{i}][fg{i}];\
+                "[{i}:v]fps={export_fps}{flip_chain},split=2[bg{i}][fg{i}];\
                  [bg{i}]scale={target_w}:{target_h}:force_original_aspect_ratio=increase,\
                  crop={target_w}:{target_h},boxblur=20:5[bgb{i}];\
                  [fg{i}]scale={target_w}:{target_h}:force_original_aspect_ratio=decrease[fgs{i}];\
-                 [bgb{i}][fgs{i}]overlay=(W-w)/2:(H-h)/2,setsar=1,format=yuv420p,\
+                 [bgb{i}][fgs{i}]overlay=(W-w)/2:(H-h)/2,setsar=1,format=rgba,\
                  setpts=PTS-STARTPTS+{t_start:.3}/TB[v{i}]"
             ),
             _ => {
@@ -281,8 +344,8 @@ pub async fn export_project(app: AppHandle, req: ExportRequest) -> Result<String
                 let x_expr = format!("(iw-{target_w})*(0.5+{:.4}*0.5)", cx);
                 let y_expr = format!("(ih-{target_h})*(0.5+{:.4}*0.5)", cy);
                 format!(
-                    "[{i}:v]fps=30,scale={scaled_w}:{scaled_h}:force_original_aspect_ratio=increase,\
-                     crop={target_w}:{target_h}:{x_expr}:{y_expr},setsar=1,format=yuv420p,\
+                    "[{i}:v]fps={export_fps}{flip_chain},scale={scaled_w}:{scaled_h}:force_original_aspect_ratio=increase,\
+                     crop={target_w}:{target_h}:{x_expr}:{y_expr},setsar=1,format=rgba,\
                      setpts=PTS-STARTPTS+{t_start:.3}/TB[v{i}]"
                 )
             }
@@ -295,7 +358,7 @@ pub async fn export_project(app: AppHandle, req: ExportRequest) -> Result<String
         ));
         last_video_pad = next_pad;
 
-        let effective_vol = if req.video_muted || clip.muted {
+        let effective_vol = if req.video_muted || clip.muted || clip.media_type == "image" {
             0.0
         } else {
             (clip.volume * req.video_volume).clamp(0.0, 2.0)
@@ -310,6 +373,9 @@ pub async fn export_project(app: AppHandle, req: ExportRequest) -> Result<String
             audio_mix_inputs.push(format!("[va{i}]"));
         }
     }
+
+    filter_parts.push(format!("{last_video_pad}format=yuv420p[vfinal]"));
+    last_video_pad = "[vfinal]".to_string();
 
     let n_video = sorted_videos.len();
     for (orig_idx, aclip) in req.audio_clips.iter().enumerate() {
